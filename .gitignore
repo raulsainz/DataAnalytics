@@ -1,0 +1,5 @@
+__pycache__/
+# MacOS folders
+**/.DS_Store
+# Jupyter Notebook
+.ipynb_checkpoints
