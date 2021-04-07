@@ -1,4 +1,7 @@
 
+#VS Code workspace
+.code-workspace
+
 # MacOS folders
 **/.DS_Store
 # Jupyter Notebook
