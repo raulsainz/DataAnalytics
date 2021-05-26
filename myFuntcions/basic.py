@@ -12,6 +12,16 @@ from googletrans import Translator, constants
 from os import path
 import requests
 import pandas as pd
+#Libraries for model evaluation
+from sklearn import metrics
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import plot_confusion_matrix
+from sklearn.metrics import plot_roc_curve
+from sklearn.metrics import classification_report
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import cohen_kappa_score
 #Define constant enviroment variables
 DATASET_PATH = 'datasets/'
 GITHUB_URL = 'https://raw.githubusercontent.com/raulsainz/DataAnalytics/main/datasets/'
@@ -98,7 +108,79 @@ def loadDataSet(filename,sample_size=1,describe=True,git = False):
     except Exception as e:
         logMessage(str(e),2)
 
+class MyCustomError(Exception):
+    pass
+def getAirportInfo(code):
+    url = "https://airport-info.p.rapidapi.com/airport"
+    headers = {
+                'x-rapidapi-key': "3c8298d3abmsh47bededcce49e9ep16b1bbjsn8b382dd0e6c9",
+                'x-rapidapi-host': "airport-info.p.rapidapi.com"
+            }
+    params = {"iata":code}
+    response = requests.request("GET", url, headers=headers , params=params)
+    try:     
+        if response.status_code ==200:           
+            data = response.json()
+            if 'ageYears' in data:
+                age = data['ageYears']
+            else:
+                return [tail,np.NaN]
+            if type(age) == int or type(age) == float:
+                print('Aircraft:'+tail+' Age:'+ str(data['ageYears']))
+                return [tail,age]
+            else:
+                print('Aircraft:'+tail+' Age: NA')
+                return [tail,np.NaN]
+        else:
+            raise MyCustomError("bad response: "+str(response.status_code))
+            return [tail,np.NaN]
+        #print('Aircraft:'+tail+' Age:'+data['ageYears']) 
+    except Exception as e:
+        return "NO DATA"
+    return    
 
 
+def run_model2(model, X_train, y_train, X_test, y_test, verbose=True, desc = 'No Name',labels = ['True','False']):
+    global model_results
+    if verbose == False:
+        model.fit(X_train,y_train, verbose=0)
+    else:
+        model.fit(X_train,y_train)
+    y_pred = model.predict(X_test)
+    roc_auc = roc_auc_score(y_test, y_pred)
+    model_acc = metrics.accuracy_score(y_test, y_pred )  # Model Accuracy, how often is the classifier correct?
+    model_kappa = cohen_kappa_score(y_test, y_pred ) 
+    class_report = classification_report(y_test,y_pred,digits=2,output_dict=True)
+    cross_val_score_mean = mean(cross_val_score(model,X_train,y_train,cv=cv_n_split))
+
+
+
+    fig, ax = plt.subplots(1, 2)
+    fig.suptitle('Model Results for: {}'.format(desc))
+    plot_confusion_matrix(model, X_test, y_test,cmap=plt.cm.Blues, normalize = 'all', display_labels = labels, values_format = '.2%',colorbar = False,ax=ax[0]) 
+    plot_roc_curve(model, X_test, y_test, ax = ax[1])
+
+    print("============== Results for {} =================".format(desc))
+    print("Accuracy              : {:.2%}".format(model_acc))
+    print("ROC_AUC               : {:.2%}".format(roc_auc))
+    print("KAPPA                 : {:.2%}".format(model_kappa))
+    print("MacroAVG-Precision    : {:.2%}".format(class_report['macro avg']['precision']))
+    print("MacroAVG-Recall       : {:.2%}".format(class_report['macro avg']['recall']))
+    print("macroAVG-F1 Score     : {:.2%}".format(class_report['macro avg']['f1-score']))
+    print("Avg CrossValid Score  : {:.2%} ({} Folds)".format(cross_val_score_mean,cv_n_split))
+
+    fpr, tpr, thresh = metrics.roc_curve(y_test, y_pred)
+    model_results[len(model_results)] = {
+        'model'                 :type(model),
+        'description'           :desc,
+        'model_acc'             :model_acc,
+        'roc_auc'               :roc_auc,
+        'cross_val_score_mean'  :cross_val_score_mean,
+        'Precision'             :class_report['macro avg']['precision'],
+        'Recall'                :class_report['macro avg']['recall'],
+        'f1_score'              :class_report['macro avg']['f1-score'],
+        'fpr'                   :fpr,
+        'tpr'                   :tpr
+    }
     
 
